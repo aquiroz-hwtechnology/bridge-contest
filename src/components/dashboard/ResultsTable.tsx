@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { Card, CardHeader, CardContent } from '@/components/ui/Card';
 import { useStore } from '@/store/useStore';
-import { Trophy, Medal, ChevronRight, ChevronDown, Download, FileSpreadsheet, FileText } from 'lucide-react';
+import { Trophy, Medal, ChevronRight, ChevronDown, FileSpreadsheet, FileText } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 function fmt(n: number, decimals = 2): string {
   if (n === 0) return '0';
@@ -65,78 +67,77 @@ export function ResultsTable() {
   // ============================================================
   // EXPORT TO PDF
   // ============================================================
-  const exportToPDF = async () => {
-    const { jsPDF } = await import('jspdf');
-    await import('jspdf-autotable');
+  const exportToPDF = () => {
+    try {
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'letter' });
 
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'letter' });
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Primer Concurso de Puentes - IAS UNIPAZ 2026', 14, 15);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Resultados generados el ' + new Date().toLocaleDateString('es-CO') + ' a las ' + new Date().toLocaleTimeString('es-CO'), 14, 22);
 
-    // Header
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Primer Concurso de Puentes - IAS UNIPAZ 2026', 14, 15);
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`Resultados generados el ${new Date().toLocaleDateString('es-CO')} a las ${new Date().toLocaleTimeString('es-CO')}`, 14, 22);
+      const headers = [
+        ['Pos', 'Puente', 'Peso(gr)', 'Carga(gr)', 'Rel C/P', 'Pts(70%)',
+         'Est.Prom', 'Pts(10%)', 'Video', 'Pts(10%)', 'Ficha Prom', 'Pts(10%)', 'TOTAL']
+      ];
 
-    // Table
-    const headers = [
-      ['Pos', 'Puente', 'Peso(gr)', 'Carga(gr)', 'Rel C/P', 'Pts(70%)',
-       'Est.Prom', 'Pts(10%)', 'Video', 'Pts(10%)', 'Ficha Prom', 'Pts(10%)', 'TOTAL']
-    ];
+      const body = results.map((r) => [
+        String(r.rank),
+        r.projectName,
+        String(r.ownWeight),
+        String(r.failureLoad),
+        r.loadWeightRatio > 0 ? r.loadWeightRatio.toFixed(1) : '-',
+        r.loadWeightRatio > 0 ? r.loadWeightPoints.toFixed(3) : '-',
+        r.totalVotes > 0 ? r.aestheticAverage.toFixed(2) : '-',
+        r.totalVotes > 0 ? r.aestheticPoints.toFixed(3) : '-',
+        r.videoScore > 0 ? String(r.videoScore) : '-',
+        r.videoScore > 0 ? r.videoPoints.toFixed(3) : '-',
+        r.totalVotes > 0 ? r.technicalSheetAverage.toFixed(2) : '-',
+        r.totalVotes > 0 ? r.technicalSheetPoints.toFixed(3) : '-',
+        r.totalScore.toFixed(1),
+      ]);
 
-    const body = results.map((r) => [
-      r.rank,
-      r.projectName,
-      r.ownWeight,
-      r.failureLoad,
-      r.loadWeightRatio > 0 ? r.loadWeightRatio.toFixed(1) : '-',
-      r.loadWeightRatio > 0 ? r.loadWeightPoints.toFixed(3) : '-',
-      r.totalVotes > 0 ? r.aestheticAverage.toFixed(2) : '-',
-      r.totalVotes > 0 ? r.aestheticPoints.toFixed(3) : '-',
-      r.videoScore > 0 ? r.videoScore : '-',
-      r.videoScore > 0 ? r.videoPoints.toFixed(3) : '-',
-      r.totalVotes > 0 ? r.technicalSheetAverage.toFixed(2) : '-',
-      r.totalVotes > 0 ? r.technicalSheetPoints.toFixed(3) : '-',
-      r.totalScore.toFixed(1),
-    ]);
+      autoTable(doc, {
+        head: headers,
+        body: body,
+        startY: 28,
+        theme: 'grid',
+        styles: { fontSize: 7, cellPadding: 1.5 },
+        headStyles: { fillColor: [39, 52, 117], textColor: 255, fontStyle: 'bold', fontSize: 7 },
+        columnStyles: {
+          0: { halign: 'center', cellWidth: 10 },
+          1: { cellWidth: 35 },
+          2: { halign: 'center' },
+          3: { halign: 'center' },
+          4: { halign: 'center' },
+          5: { halign: 'center', fontStyle: 'bold' },
+          6: { halign: 'center' },
+          7: { halign: 'center', fontStyle: 'bold' },
+          8: { halign: 'center' },
+          9: { halign: 'center', fontStyle: 'bold' },
+          10: { halign: 'center' },
+          11: { halign: 'center', fontStyle: 'bold' },
+          12: { halign: 'center', fontStyle: 'bold', fillColor: [39, 52, 117], textColor: 255 },
+        },
+        alternateRowStyles: { fillColor: [248, 249, 252] },
+      });
 
-    (doc as any).autoTable({
-      head: headers,
-      body: body,
-      startY: 28,
-      theme: 'grid',
-      styles: { fontSize: 7, cellPadding: 1.5 },
-      headStyles: { fillColor: [39, 52, 117], textColor: 255, fontStyle: 'bold', fontSize: 7 },
-      columnStyles: {
-        0: { halign: 'center', cellWidth: 10 },
-        1: { cellWidth: 35 },
-        2: { halign: 'center' },
-        3: { halign: 'center' },
-        4: { halign: 'center' },
-        5: { halign: 'center', fontStyle: 'bold', textColor: [192, 57, 43] },
-        6: { halign: 'center' },
-        7: { halign: 'center', fontStyle: 'bold', textColor: [41, 128, 185] },
-        8: { halign: 'center' },
-        9: { halign: 'center', fontStyle: 'bold', textColor: [154, 125, 10] },
-        10: { halign: 'center' },
-        11: { halign: 'center', fontStyle: 'bold', textColor: [0, 122, 45] },
-        12: { halign: 'center', fontStyle: 'bold', fillColor: [39, 52, 117], textColor: 255 },
-      },
-      alternateRowStyles: { fillColor: [248, 249, 252] },
-    });
+      const pageCount = doc.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setTextColor(150);
+        doc.text('Instituto Universitario de la Paz - UNIPAZ | Concurso de Puentes 2026', 14, doc.internal.pageSize.height - 8);
+        doc.text('Pagina ' + i + ' de ' + pageCount, doc.internal.pageSize.width - 35, doc.internal.pageSize.height - 8);
+      }
 
-    // Footer
-    const pageCount = (doc as any).getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-      doc.setPage(i);
-      doc.setFontSize(8);
-      doc.setTextColor(150);
-      doc.text('Instituto Universitario de la Paz - UNIPAZ | Concurso de Puentes 2026', 14, doc.internal.pageSize.height - 8);
-      doc.text(`Pagina ${i} de ${pageCount}`, doc.internal.pageSize.width - 35, doc.internal.pageSize.height - 8);
+      doc.save('Resultados_Concurso_Puentes_UNIPAZ_' + new Date().toISOString().slice(0, 10) + '.pdf');
+    } catch (err) {
+      console.error('Error generando PDF:', err);
+      alert('Error al generar el PDF. Revise la consola para mas detalles.');
     }
-
-    doc.save(`Resultados_Concurso_Puentes_UNIPAZ_${new Date().toISOString().slice(0, 10)}.pdf`);
   };
 
   // Toggle button component
