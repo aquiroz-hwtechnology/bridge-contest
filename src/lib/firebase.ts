@@ -1,17 +1,15 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "demo-api-key",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "demo.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "bridge-contest-unipaz",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "demo.appspot.com",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "000000000",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:000:web:000",
+  apiKey: "AIzaSyA_5eXsWA4LRZGqYl5_oO0MUloPqCFJoEI",
+  authDomain: "concurso-puentes-unipaz.firebaseapp.com",
+  projectId: "concurso-puentes-unipaz",
+  storageBucket: "concurso-puentes-unipaz.firebasestorage.app",
+  messagingSenderId: "92294175261",
+  appId: "1:92294175261:web:dfe4491037186c0b34c4f4"
 };
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
-export const auth = getAuth(app);
 export default app;

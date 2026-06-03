@@ -14,14 +14,14 @@ export function ConfigPanel() {
 
   const totalWeight = weights.loadWeight + weights.aesthetic + weights.video + weights.technicalSheet;
 
-  const handleSaveWeights = () => {
+  const handleSaveWeights = async () => {
     if (totalWeight !== 100) return;
-    updateConfig({ weights, contestName, contestDate });
+    await updateConfig({ weights, contestName, contestDate });
   };
 
-  const handleSavePassword = () => {
+  const handleSavePassword = async () => {
     if (newPassword.trim()) {
-      updateConfig({ adminPassword: newPassword });
+      await updateConfig({ adminPassword: newPassword });
       setNewPassword('');
     }
   };

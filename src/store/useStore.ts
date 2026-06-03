@@ -1,13 +1,12 @@
 import { create } from 'zustand';
 import type { BridgeProject, Vote, AppConfig, ProjectResults } from '@/types';
 import { initialBridges } from '@/data/bridges';
+import * as fb from '@/lib/firebaseService';
 
 // ============================================================
-// PERSISTENCIA MANUAL - Sin middleware persist de Zustand
-// Lectura/escritura directa a localStorage con control total
+// Store con Firebase Firestore - datos en la nube
+// Cualquier navegador/dispositivo ve los mismos datos en tiempo real
 // ============================================================
-
-const STORAGE_KEY = 'bridge-contest-v3';
 
 const defaultConfig: AppConfig = {
   weights: { loadWeight: 70, aesthetic: 10, video: 10, technicalSheet: 10 },
@@ -17,89 +16,128 @@ const defaultConfig: AppConfig = {
   institution: 'IAS UNIPAZ',
 };
 
-// Leer estado guardado del localStorage
-function loadFromStorage(): { projects: BridgeProject[]; votes: Vote[]; config: AppConfig } {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const data = JSON.parse(raw);
-      return {
-        projects: data.projects || initialBridges,
-        votes: data.votes || [],
-        config: data.config || defaultConfig,
-      };
-    }
-  } catch (e) {
-    console.error('Error loading from localStorage:', e);
-  }
-  return { projects: initialBridges, votes: [], config: defaultConfig };
-}
-
-// Guardar estado al localStorage
-function saveToStorage(state: { projects: BridgeProject[]; votes: Vote[]; config: AppConfig }) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({
-      projects: state.projects,
-      votes: state.votes,
-      config: state.config,
-    }));
-  } catch (e) {
-    console.error('Error saving to localStorage:', e);
-  }
-}
-
-// Estado inicial desde localStorage
-const savedState = loadFromStorage();
-
 interface AppState {
   projects: BridgeProject[];
   votes: Vote[];
   config: AppConfig;
   isAdmin: boolean;
-  addProject: (project: BridgeProject) => void;
-  updateProject: (id: string, data: Partial<BridgeProject>) => void;
-  deleteProject: (id: string) => void;
-  addVote: (vote: Vote) => void;
-  deleteVote: (voteId: string) => void;
-  deleteVotesForProject: (projectId: string) => void;
+  loading: boolean;
+
+  // Init
+  init: () => Promise<void>;
+
+  // Projects
+  addProject: (project: BridgeProject) => Promise<void>;
+  updateProject: (id: string, data: Partial<BridgeProject>) => Promise<void>;
+  deleteProject: (id: string) => Promise<void>;
+
+  // Votes
+  addVote: (vote: Vote) => Promise<void>;
+  deleteVote: (voteId: string) => Promise<void>;
+  deleteVotesForProject: (projectId: string) => Promise<void>;
   hasVoted: (judgeId: string, projectId: string) => boolean;
   getVotesForProject: (projectId: string) => Vote[];
+  resetVotes: () => Promise<void>;
+
+  // Admin
   login: (password: string) => boolean;
   logout: () => void;
-  updateConfig: (config: Partial<AppConfig>) => void;
+  updateConfig: (config: Partial<AppConfig>) => Promise<void>;
+
+  // Calculations
   getProjectResults: () => ProjectResults[];
-  resetVotes: () => void;
 }
 
 export const useStore = create<AppState>()((set, get) => ({
-  projects: savedState.projects,
-  votes: savedState.votes,
-  config: savedState.config,
+  projects: [],
+  votes: [],
+  config: defaultConfig,
   isAdmin: false,
+  loading: true,
 
-  addProject: (project) => set((s) => ({ projects: [...s.projects, project] })),
+  // ============================================================
+  // INIT: Carga datos de Firebase + activa listeners en tiempo real
+  // ============================================================
+  init: async () => {
+    try {
+      // Load config
+      const config = await fb.loadConfig();
+      if (config) {
+        set({ config });
+      } else {
+        await fb.saveConfig(defaultConfig);
+      }
 
-  updateProject: (id, data) => set((s) => ({
-    projects: s.projects.map((p) =>
-      p.id === id ? { ...p, ...data, updatedAt: new Date().toISOString() } : p
-    ),
-  })),
+      // Subscribe to real-time updates (projects)
+      fb.subscribeProjects((projects) => {
+        if (projects.length === 0) return; // skip empty (seed in progress)
+        set({ projects, loading: false });
+      });
 
-  deleteProject: (id) => set((s) => ({
-    projects: s.projects.filter((p) => p.id !== id),
-    votes: s.votes.filter((v) => v.projectId !== id),
-  })),
+      // Subscribe to real-time updates (votes)
+      fb.subscribeVotes((votes) => {
+        set({ votes });
+      });
 
-  addVote: (vote) => set((s) => ({ votes: [...s.votes, vote] })),
+      // Initial load of projects (triggers seed if empty)
+      const projects = await fb.loadProjects();
+      set({ projects, loading: false });
+    } catch (error) {
+      console.error('Firebase init error:', error);
+      // Fallback to initial data if Firebase fails
+      set({ projects: initialBridges, loading: false });
+    }
+  },
 
-  deleteVote: (voteId) => set((s) => ({ votes: s.votes.filter((v) => v.id !== voteId) })),
+  // ============================================================
+  // PROJECTS - escriben a Firebase, los listeners actualizan el state
+  // ============================================================
+  addProject: async (project) => {
+    await fb.saveProject(project);
+    // No need to set state - the onSnapshot listener will update it
+  },
 
-  deleteVotesForProject: (pid) => set((s) => ({ votes: s.votes.filter((v) => v.projectId !== pid) })),
+  updateProject: async (id, data) => {
+    const project = get().projects.find((p) => p.id === id);
+    if (!project) return;
+    const updated = { ...project, ...data, updatedAt: new Date().toISOString() };
+    await fb.saveProject(updated);
+    // Listener will update state automatically
+  },
 
-  hasVoted: (judgeId, projectId) => get().votes.some((v) => v.judgeId === judgeId && v.projectId === projectId),
+  deleteProject: async (id) => {
+    await fb.removeProject(id);
+    await fb.removeVotesForProject(id);
+  },
+
+  // ============================================================
+  // VOTES - escriben a Firebase, los listeners actualizan el state
+  // ============================================================
+  addVote: async (vote) => {
+    await fb.saveVote(vote);
+  },
+
+  deleteVote: async (voteId) => {
+    await fb.removeVote(voteId);
+  },
+
+  deleteVotesForProject: async (projectId) => {
+    await fb.removeVotesForProject(projectId);
+  },
+
+  hasVoted: (judgeId, projectId) => {
+    return get().votes.some((v) => v.judgeId === judgeId && v.projectId === projectId);
+  },
 
   getVotesForProject: (pid) => get().votes.filter((v) => v.projectId === pid),
 
+  resetVotes: async () => {
+    await fb.removeAllVotes();
+  },
+
+  // ============================================================
+  // ADMIN
+  // ============================================================
   login: (password) => {
     const ok = password === get().config.adminPassword;
     if (ok) set({ isAdmin: true });
@@ -108,8 +146,15 @@ export const useStore = create<AppState>()((set, get) => ({
 
   logout: () => set({ isAdmin: false }),
 
-  updateConfig: (c) => set((s) => ({ config: { ...s.config, ...c } })),
+  updateConfig: async (c) => {
+    const newConfig = { ...get().config, ...c };
+    set({ config: newConfig });
+    await fb.saveConfig(newConfig);
+  },
 
+  // ============================================================
+  // CALCULATIONS - mismas formulas del Excel
+  // ============================================================
   getProjectResults: () => {
     const { projects, votes, config } = get();
     const { weights } = config;
@@ -133,23 +178,19 @@ export const useStore = create<AppState>()((set, get) => ({
       const avgEst = n > 0 ? pv.reduce((s, v) => s + v.aestheticScore, 0) / n : 0;
       const avgFicha = n > 0 ? pv.reduce((s, v) => s + v.technicalSheetScore, 0) / n : 0;
       const vs = project.videoScore || 0;
+      const lwp = (ratio / maxRatio) * ptsCarga;
+      const aep = (avgEst / 10) * ptsEst;
+      const vp = (vs / maxVideo) * ptsVid;
+      const tsp = (avgFicha / 10) * ptsFicha;
 
       return {
-        projectId: project.id,
-        projectName: project.name,
-        totalVotes: n,
-        ownWeight: project.ownWeight || 0,
-        failureLoad: project.failureLoad || 0,
-        loadWeightRatio: ratio,
-        loadWeightPoints: (ratio / maxRatio) * ptsCarga,
-        aestheticAverage: avgEst,
-        aestheticPoints: (avgEst / 10) * ptsEst,
-        videoScore: vs,
-        videoPoints: (vs / maxVideo) * ptsVid,
-        technicalSheetAverage: avgFicha,
-        technicalSheetPoints: (avgFicha / 10) * ptsFicha,
-        totalScore: (ratio / maxRatio) * ptsCarga + (avgEst / 10) * ptsEst + (vs / maxVideo) * ptsVid + (avgFicha / 10) * ptsFicha,
-        rank: 0,
+        projectId: project.id, projectName: project.name, totalVotes: n,
+        ownWeight: project.ownWeight || 0, failureLoad: project.failureLoad || 0,
+        loadWeightRatio: ratio, loadWeightPoints: lwp,
+        aestheticAverage: avgEst, aestheticPoints: aep,
+        videoScore: vs, videoPoints: vp,
+        technicalSheetAverage: avgFicha, technicalSheetPoints: tsp,
+        totalScore: lwp + aep + vp + tsp, rank: 0,
       };
     });
 
@@ -157,31 +198,4 @@ export const useStore = create<AppState>()((set, get) => ({
     results.forEach((r, i) => { r.rank = i + 1; });
     return results;
   },
-
-  resetVotes: () => set({ votes: [] }),
 }));
-
-// ============================================================
-// AUTO-SAVE: Cada vez que el estado cambia, guardar a localStorage
-// ============================================================
-useStore.subscribe((state) => {
-  saveToStorage({ projects: state.projects, votes: state.votes, config: state.config });
-});
-
-// ============================================================
-// CROSS-TAB SYNC: Cuando otra pestana/navegador modifica localStorage
-// ============================================================
-if (typeof window !== 'undefined') {
-  window.addEventListener('storage', (e) => {
-    if (e.key === STORAGE_KEY && e.newValue) {
-      try {
-        const data = JSON.parse(e.newValue);
-        useStore.setState({
-          projects: data.projects || initialBridges,
-          votes: data.votes || [],
-          config: data.config || defaultConfig,
-        });
-      } catch {}
-    }
-  });
-}

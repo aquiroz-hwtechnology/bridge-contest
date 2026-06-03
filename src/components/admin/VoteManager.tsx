@@ -19,13 +19,13 @@ export function VoteManager() {
   const getProjectName = (projectId: string) =>
     projects.find((p) => p.id === projectId)?.name || projectId;
 
-  const handleDeleteVote = (voteId: string) => {
-    deleteVote(voteId);
+  const handleDeleteVote = async (voteId: string) => {
+    await deleteVote(voteId);
     setDeleteConfirm(null);
   };
 
-  const handleBulkDelete = (projectId: string) => {
-    deleteVotesForProject(projectId);
+  const handleBulkDelete = async (projectId: string) => {
+    await deleteVotesForProject(projectId);
     setBulkDeleteProject(null);
   };
 
@@ -198,7 +198,7 @@ export function VoteManager() {
           </div>
           <div className="flex gap-3">
             <Button variant="ghost" className="flex-1" onClick={() => setShowResetConfirm(false)}>Cancelar</Button>
-            <Button variant="danger" className="flex-1" onClick={() => { resetVotes(); setShowResetConfirm(false); }}>Eliminar Todo</Button>
+            <Button variant="danger" className="flex-1" onClick={async () => { await resetVotes(); setShowResetConfirm(false); }}>Eliminar Todo</Button>
           </div>
         </div>
       </Modal>

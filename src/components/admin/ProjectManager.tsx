@@ -44,11 +44,11 @@ export function ProjectManager() {
     setShowForm(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formData.name.trim() || !formData.teamName.trim()) return;
 
     if (editingProject) {
-      updateProject(editingProject.id, formData);
+      await updateProject(editingProject.id, formData);
     } else {
       const newProject: BridgeProject = {
         id: `bridge-${Date.now()}`,
@@ -58,13 +58,13 @@ export function ProjectManager() {
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
-      addProject(newProject);
+      await addProject(newProject);
     }
     setShowForm(false);
   };
 
-  const handleDelete = (id: string) => {
-    deleteProject(id);
+  const handleDelete = async (id: string) => {
+    await deleteProject(id);
     setShowDeleteConfirm(null);
   };
 

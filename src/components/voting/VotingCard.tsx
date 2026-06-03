@@ -19,9 +19,9 @@ export function VotingCard({ project, judgeId }: VotingCardProps) {
   const [showConfirm, setShowConfirm] = useState(false);
   const [voted, setVoted] = useState(hasVoted(judgeId, project.id));
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const judgeData = JSON.parse(localStorage.getItem('judge_info') || '{}');
-    addVote({
+    await addVote({
       id: `vote_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       projectId: project.id,
       judgeId,
