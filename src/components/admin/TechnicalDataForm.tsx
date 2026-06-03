@@ -1,58 +1,37 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
 import { useStore } from '@/store/useStore';
-import { Save, Calculator, Check } from 'lucide-react';
+import { Calculator, Check } from 'lucide-react';
 
 export function TechnicalDataForm() {
   const { projects, updateProject, getProjectResults } = useStore();
-  const [editData, setEditData] = useState<Record<string, Record<string, number | undefined>>>({});
   const [savedRows, setSavedRows] = useState<Set<string>>(new Set());
+  const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const results = getProjectResults();
 
-  const handleFieldChange = (projectId: string, field: string, value: string) => {
-    setEditData((prev) => ({
-      ...prev,
-      [projectId]: {
-        ...prev[projectId],
-        [field]: value === '' ? undefined : Number(value),
-      },
-    }));
-    setSavedRows((prev) => { const n = new Set(prev); n.delete(projectId); return n; });
-  };
+  // Save DIRECTLY to the store on every change (with tiny debounce for typing)
+  const handleChange = (projectId: string, field: string, value: string) => {
+    const key = `${projectId}_${field}`;
 
-  const handleSave = (projectId: string) => {
-    const data = editData[projectId];
-    if (data) {
-      updateProject(projectId, data);
-      setEditData((prev) => { const u = { ...prev }; delete u[projectId]; return u; });
-      setSavedRows((prev) => new Set(prev).add(projectId));
-      setTimeout(() => setSavedRows((prev) => { const n = new Set(prev); n.delete(projectId); return n; }), 2000);
+    // Clear previous timer for this field
+    if (debounceTimers.current[key]) {
+      clearTimeout(debounceTimers.current[key]);
     }
+
+    // Save after 300ms of no typing
+    debounceTimers.current[key] = setTimeout(() => {
+      const numValue = value === '' ? undefined : Number(value);
+      updateProject(projectId, { [field]: numValue });
+
+      // Show saved indicator
+      setSavedRows((prev) => new Set(prev).add(projectId));
+      setTimeout(() => {
+        setSavedRows((prev) => { const n = new Set(prev); n.delete(projectId); return n; });
+      }, 1500);
+    }, 300);
   };
 
-  const handleSaveAll = () => {
-    Object.keys(editData).forEach((id) => {
-      const data = editData[id];
-      if (data && Object.keys(data).length > 0) {
-        updateProject(id, data);
-      }
-    });
-    setEditData({});
-    setSavedRows(new Set(projects.map((p) => p.id)));
-    setTimeout(() => setSavedRows(new Set()), 2000);
-  };
-
-  const getValue = (projectId: string, field: string, current: number | undefined) => {
-    return editData[projectId]?.[field] !== undefined
-      ? editData[projectId][field]
-      : current;
-  };
-
-  const hasChanges = Object.keys(editData).some((id) => Object.keys(editData[id]).length > 0);
-
-  // Get result for a project
   const getResult = (projectId: string) => results.find((r) => r.projectId === projectId);
 
   const inputClass = "w-full px-2 py-1.5 text-sm text-center border rounded-lg outline-none font-medium tabular-nums";
@@ -60,27 +39,20 @@ export function TechnicalDataForm() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-3">
-            <Calculator className="w-5 h-5" style={{ color: '#273475' }} />
-            <div>
-              <h3 className="text-lg font-bold text-gray-800">Datos Tecnicos - Tabla General</h3>
-              <p className="text-xs text-gray-500">
-                Edite directamente en la tabla. Los campos con fondo rojo son manuales, los grises se calculan automaticamente.
-              </p>
-            </div>
+        <div className="flex items-center gap-3">
+          <Calculator className="w-5 h-5" style={{ color: '#273475' }} />
+          <div>
+            <h3 className="text-lg font-bold text-gray-800">Datos Tecnicos - Tabla General</h3>
+            <p className="text-xs text-gray-500">
+              Edite directamente en la tabla. <b>Los cambios se guardan automaticamente</b> y se reflejan al instante en el dashboard.
+            </p>
           </div>
-          {hasChanges && (
-            <Button size="sm" onClick={handleSaveAll}>
-              <Save className="w-3.5 h-3.5" /> Guardar Todo
-            </Button>
-          )}
         </div>
       </CardHeader>
       <CardContent className="overflow-x-auto">
         {/* Formulas reference */}
-        <div className="mb-3 flex flex-wrap gap-4 text-xs text-gray-500">
-          <span><b className="text-red-700">Manual</b> = Ingreso directo</span>
+        <div className="mb-3 p-2 bg-green-50 border border-green-200 rounded-lg flex flex-wrap gap-4 text-xs text-gray-600">
+          <span className="text-green-700 font-bold">Guardado automatico</span>
           <span>Rel. C/P = Carga / Peso</span>
           <span>Pts(70%) = (Rel / Max) x 7</span>
           <span>Pts Video = (Video / Max) x 1</span>
@@ -102,7 +74,7 @@ export function TechnicalDataForm() {
               <th className="py-1 px-1 text-center text-xs font-bold text-white rounded-t-md" style={{ backgroundColor: '#7f8c8d' }}>
                 CALC.
               </th>
-              <th className="py-1 px-1" rowSpan={2}></th>
+              <th className="py-1 px-1" rowSpan={2} style={{ width: '30px' }}></th>
             </tr>
             <tr className="border-b-2 border-gray-300">
               <th className="py-1.5 px-1 text-center text-xs font-semibold" style={{ backgroundColor: '#fde8e8', color: '#c0392b' }}>Peso (gr)</th>
@@ -117,10 +89,9 @@ export function TechnicalDataForm() {
             {projects.map((project) => {
               const r = getResult(project.id);
               const isSaved = savedRows.has(project.id);
-              const hasEdit = editData[project.id] && Object.keys(editData[project.id]).length > 0;
 
               return (
-                <tr key={project.id} className={`border-b border-gray-100 ${hasEdit ? 'bg-amber-50/40' : ''} ${isSaved ? 'bg-green-50' : ''}`}>
+                <tr key={project.id} className={`border-b border-gray-100 transition-colors ${isSaved ? 'bg-green-50' : 'hover:bg-gray-50/50'}`}>
                   {/* Project name */}
                   <td className="py-2 px-1">
                     <div className="flex items-center gap-2">
@@ -130,14 +101,14 @@ export function TechnicalDataForm() {
                       <span className="font-medium text-gray-800 text-xs whitespace-nowrap">{project.name}</span>
                     </div>
                   </td>
-                  {/* Peso Propio - MANUAL */}
+                  {/* Peso Propio - MANUAL - writes directly to store */}
                   <td className="py-1 px-1" style={{ backgroundColor: '#fdf2f2' }}>
                     <input
                       type="number"
                       step="0.01"
                       min="0"
-                      value={getValue(project.id, 'ownWeight', project.ownWeight) ?? ''}
-                      onChange={(e) => handleFieldChange(project.id, 'ownWeight', e.target.value)}
+                      defaultValue={project.ownWeight ?? ''}
+                      onChange={(e) => handleChange(project.id, 'ownWeight', e.target.value)}
                       className={`${inputClass} border-red-200 focus:ring-2 focus:ring-red-300/50 bg-white w-20`}
                       placeholder="-"
                     />
@@ -148,13 +119,13 @@ export function TechnicalDataForm() {
                       type="number"
                       step="0.01"
                       min="0"
-                      value={getValue(project.id, 'failureLoad', project.failureLoad) ?? ''}
-                      onChange={(e) => handleFieldChange(project.id, 'failureLoad', e.target.value)}
+                      defaultValue={project.failureLoad ?? ''}
+                      onChange={(e) => handleChange(project.id, 'failureLoad', e.target.value)}
                       className={`${inputClass} border-red-200 focus:ring-2 focus:ring-red-300/50 bg-white w-20`}
                       placeholder="-"
                     />
                   </td>
-                  {/* Relacion - CALCULATED */}
+                  {/* Relacion - CALCULATED (live from store) */}
                   <td className="py-1 px-1 text-center text-xs font-medium text-gray-600 bg-gray-50">
                     {r && r.loadWeightRatio > 0 ? r.loadWeightRatio.toFixed(1) : '-'}
                   </td>
@@ -168,8 +139,8 @@ export function TechnicalDataForm() {
                       type="number"
                       step="1"
                       min="0"
-                      value={getValue(project.id, 'videoScore', project.videoScore) ?? ''}
-                      onChange={(e) => handleFieldChange(project.id, 'videoScore', e.target.value)}
+                      defaultValue={project.videoScore ?? ''}
+                      onChange={(e) => handleChange(project.id, 'videoScore', e.target.value)}
                       className={`${inputClass} border-amber-200 focus:ring-2 focus:ring-amber-300/50 bg-white w-20`}
                       placeholder="-"
                     />
@@ -178,19 +149,9 @@ export function TechnicalDataForm() {
                   <td className="py-1 px-1 text-center text-xs font-bold bg-gray-50" style={{ color: '#9a7d0a' }}>
                     {r && r.videoScore > 0 ? r.videoPoints.toFixed(2) : '-'}
                   </td>
-                  {/* Save button */}
+                  {/* Saved indicator */}
                   <td className="py-1 px-1 text-center">
-                    {isSaved ? (
-                      <Check className="w-4 h-4 text-green-500 mx-auto" />
-                    ) : hasEdit ? (
-                      <button
-                        onClick={() => handleSave(project.id)}
-                        className="p-1 rounded hover:bg-blue-100 transition-colors"
-                        title="Guardar"
-                      >
-                        <Save className="w-3.5 h-3.5" style={{ color: '#273475' }} />
-                      </button>
-                    ) : null}
+                    {isSaved && <Check className="w-4 h-4 text-green-500 mx-auto" />}
                   </td>
                 </tr>
               );

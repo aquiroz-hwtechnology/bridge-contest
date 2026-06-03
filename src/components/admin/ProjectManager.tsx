@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { useStore } from '@/store/useStore';
 import type { BridgeProject } from '@/types';
-import { Plus, Edit2, Trash2, QrCode, ImageIcon } from 'lucide-react';
+import { Plus, Edit2, Trash2, QrCode, ImageIcon, Upload } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
 export function ProjectManager() {
@@ -203,28 +203,81 @@ export function ProjectManager() {
             />
           </div>
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
               <ImageIcon className="w-4 h-4 inline mr-1" />
-              Imagen del Puente (URL)
+              Imagen del Puente
             </label>
+            {/* Upload from PC */}
+            <div className="flex gap-2 mb-2">
+              <label className="flex-1 flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-blue-300 rounded-xl cursor-pointer hover:bg-blue-50 transition-colors text-sm font-medium" style={{ color: '#273475' }}>
+                <Upload className="w-4 h-4" />
+                Subir foto desde el PC
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    // Resize and convert to base64
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                      const img = new Image();
+                      img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const MAX = 800;
+                        let w = img.width, h = img.height;
+                        if (w > MAX || h > MAX) {
+                          if (w > h) { h = (h * MAX) / w; w = MAX; }
+                          else { w = (w * MAX) / h; h = MAX; }
+                        }
+                        canvas.width = w;
+                        canvas.height = h;
+                        const ctx = canvas.getContext('2d');
+                        if (ctx) {
+                          ctx.drawImage(img, 0, 0, w, h);
+                          const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                          setFormData({ ...formData, imageUrl: dataUrl });
+                        }
+                      };
+                      img.src = ev.target?.result as string;
+                    };
+                    reader.readAsDataURL(file);
+                  }}
+                />
+              </label>
+            </div>
+            {/* Or paste URL */}
+            <div className="flex items-center gap-2 mb-2">
+              <div className="flex-1 h-px bg-gray-200"></div>
+              <span className="text-xs text-gray-400">o pegar URL</span>
+              <div className="flex-1 h-px bg-gray-200"></div>
+            </div>
             <input
               type="url"
-              value={formData.imageUrl}
+              value={formData.imageUrl.startsWith('data:') ? '' : formData.imageUrl}
               onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
-              className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#273475]/40 outline-none"
+              className="w-full px-4 py-2 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#273475]/40 outline-none text-sm"
               placeholder="https://ejemplo.com/foto-puente.jpg"
             />
-            <p className="text-xs text-gray-400 mt-1">Pegue la URL de la foto del puente (JPG, PNG, etc.). Puede usar Google Drive, Imgur u otro servicio de imagenes.</p>
+            {/* Preview */}
             {formData.imageUrl && (
-              <div className="mt-2 border border-gray-200 rounded-xl overflow-hidden">
+              <div className="mt-2 border border-gray-200 rounded-xl overflow-hidden relative">
                 <img
                   src={formData.imageUrl}
                   alt="Preview"
-                  className="w-full h-32 object-cover bg-gray-100"
+                  className="w-full h-36 object-cover bg-gray-100"
                   onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = 'none';
+                    (e.target as HTMLImageElement).src = '/bridge-contest/images/bridge-placeholder.svg';
                   }}
                 />
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, imageUrl: '' })}
+                  className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-600"
+                >
+                  X
+                </button>
               </div>
             )}
           </div>
