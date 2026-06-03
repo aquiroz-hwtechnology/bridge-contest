@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+@theme {
+  /* Colores institucionales UNIPAZ */
+  --color-unipaz-blue: #273475;
+  --color-unipaz-blue-light: #3a4a9a;
+  --color-unipaz-blue-dark: #1a2456;
+  --color-unipaz-green: #009738;
+  --color-unipaz-green-light: #00b344;
+  --color-unipaz-green-dark: #007a2d;
+
+  /* Colores de la app basados en identidad UNIPAZ */
+  --color-primary: #273475;
+  --color-primary-light: #3a4a9a;
+  --color-primary-dark: #1a2456;
+  --color-secondary: #009738;
+  --color-secondary-light: #00b344;
+  --color-accent: #f59e0b;
+  --color-danger: #ef4444;
+  --color-surface: #f7f8fc;
+  --color-card: #ffffff;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--color-surface);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.glass {
+  backdrop-filter: blur(12px);
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.gradient-unipaz {
+  background: linear-gradient(135deg, #1a2456 0%, #273475 50%, #3a4a9a 100%);
+}
+
+.gradient-hero {
+  background: linear-gradient(135deg, #0f1630 0%, #1a2456 30%, #273475 60%, #3a4a9a 100%);
+}
+
+.gradient-hero-green {
+  background: linear-gradient(135deg, #273475 0%, #1a2456 40%, #007a2d 100%);
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 5px rgba(39, 52, 117, 0.4); }
+  50% { box-shadow: 0 0 20px rgba(39, 52, 117, 0.7); }
+}
+
+.pulse-glow {
+  animation: pulse-glow 2s infinite;
+}
+
+/* Separator line inspired by UNIPAZ identity */
+.unipaz-separator {
+  width: 3px;
+  background-color: #273475;
+  height: 40px;
+}

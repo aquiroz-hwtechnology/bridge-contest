@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 200">
+  <rect fill="#e2e8f0" width="400" height="200"/>
+  <path d="M50 150 L100 80 L150 150 M150 150 L200 80 L250 150 M250 150 L300 80 L350 150" stroke="#94a3b8" stroke-width="3" fill="none"/>
+  <line x1="40" y1="150" x2="360" y2="150" stroke="#64748b" stroke-width="4"/>
+  <line x1="40" y1="75" x2="360" y2="75" stroke="#64748b" stroke-width="3"/>
+  <rect x="90" y="75" width="10" height="75" fill="#94a3b8"/>
+  <rect x="190" y="75" width="10" height="75" fill="#94a3b8"/>
+  <rect x="290" y="75" width="10" height="75" fill="#94a3b8"/>
+  <text x="200" y="180" text-anchor="middle" fill="#64748b" font-size="14" font-family="sans-serif">Puente - UNIPAZ</text>
+</svg>
