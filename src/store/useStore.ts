@@ -17,6 +17,8 @@ interface AppState {
 
   // Actions - Votes
   addVote: (vote: Vote) => void;
+  deleteVote: (voteId: string) => void;
+  deleteVotesForProject: (projectId: string) => void;
   hasVoted: (judgeId: string, projectId: string) => boolean;
   getVotesForProject: (projectId: string) => Vote[];
 
@@ -69,6 +71,12 @@ export const useStore = create<AppState>()(
 
       addVote: (vote) =>
         set((state) => ({ votes: [...state.votes, vote] })),
+
+      deleteVote: (voteId) =>
+        set((state) => ({ votes: state.votes.filter((v) => v.id !== voteId) })),
+
+      deleteVotesForProject: (projectId) =>
+        set((state) => ({ votes: state.votes.filter((v) => v.projectId !== projectId) })),
 
       hasVoted: (judgeId, projectId) => {
         return get().votes.some(

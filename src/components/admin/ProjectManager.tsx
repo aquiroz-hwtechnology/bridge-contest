@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { useStore } from '@/store/useStore';
 import type { BridgeProject } from '@/types';
-import { Plus, Edit2, Trash2, QrCode } from 'lucide-react';
+import { Plus, Edit2, Trash2, QrCode, ImageIcon } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 
 export function ProjectManager() {
@@ -119,15 +119,31 @@ export function ProjectManager() {
             {projects.map((project) => (
               <div
                 key={project.id}
-                className="flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
+                className="flex items-center justify-between p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-[#273475]/10 rounded-lg flex items-center justify-center text-[#273475] font-bold text-xs">
-                    {project.code.split('-')[1]}
-                  </div>
+                  {/* Thumbnail */}
+                  <img
+                    src={project.imageUrl}
+                    alt={project.name}
+                    className="w-12 h-12 object-cover rounded-lg bg-gray-200 shrink-0"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = '/bridge-contest/images/bridge-placeholder.svg';
+                    }}
+                  />
                   <div>
-                    <p className="font-semibold text-gray-800">{project.name}</p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded" style={{ color: '#273475', backgroundColor: '#273475' + '15' }}>
+                        {project.code}
+                      </span>
+                      <p className="font-semibold text-gray-800 text-sm">{project.name}</p>
+                    </div>
                     <p className="text-xs text-gray-500">{project.teamName}</p>
+                    {!project.imageUrl || project.imageUrl.includes('placeholder') ? (
+                      <p className="text-[10px] text-amber-600 flex items-center gap-0.5 mt-0.5">
+                        <ImageIcon className="w-3 h-3" /> Sin foto del puente
+                      </p>
+                    ) : null}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -187,14 +203,30 @@ export function ProjectManager() {
             />
           </div>
           <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1">URL de Imagen</label>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">
+              <ImageIcon className="w-4 h-4 inline mr-1" />
+              Imagen del Puente (URL)
+            </label>
             <input
               type="url"
               value={formData.imageUrl}
               onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
               className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-[#273475]/40 outline-none"
-              placeholder="https://..."
+              placeholder="https://ejemplo.com/foto-puente.jpg"
             />
+            <p className="text-xs text-gray-400 mt-1">Pegue la URL de la foto del puente (JPG, PNG, etc.). Puede usar Google Drive, Imgur u otro servicio de imagenes.</p>
+            {formData.imageUrl && (
+              <div className="mt-2 border border-gray-200 rounded-xl overflow-hidden">
+                <img
+                  src={formData.imageUrl}
+                  alt="Preview"
+                  className="w-full h-32 object-cover bg-gray-100"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
+                />
+              </div>
+            )}
           </div>
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-1">URL de Video</label>

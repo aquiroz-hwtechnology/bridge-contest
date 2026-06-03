@@ -4,9 +4,9 @@ import { AdminLogin } from '@/components/admin/AdminLogin';
 import { ProjectManager } from '@/components/admin/ProjectManager';
 import { TechnicalDataForm } from '@/components/admin/TechnicalDataForm';
 import { ConfigPanel } from '@/components/admin/ConfigPanel';
+import { VoteManager } from '@/components/admin/VoteManager';
 import { KPICards } from '@/components/dashboard/KPICards';
 import { ResultsTable } from '@/components/dashboard/ResultsTable';
-import { ComparisonBarChart, CriteriaRadarChart, RankingChart } from '@/components/dashboard/Charts';
 import { Button } from '@/components/ui/Button';
 import {
   Shield,
@@ -15,10 +15,10 @@ import {
   Wrench,
   Settings,
   LogOut,
-  BarChart3,
+  Vote,
 } from 'lucide-react';
 
-type Tab = 'dashboard' | 'projects' | 'technical' | 'charts' | 'config';
+type Tab = 'dashboard' | 'projects' | 'technical' | 'votes' | 'config';
 
 export function AdminPage() {
   const { isAdmin, logout } = useStore();
@@ -32,7 +32,7 @@ export function AdminPage() {
     { id: 'dashboard' as Tab, label: 'Dashboard', icon: LayoutDashboard },
     { id: 'projects' as Tab, label: 'Proyectos', icon: FolderOpen },
     { id: 'technical' as Tab, label: 'Datos Tecnicos', icon: Wrench },
-    { id: 'charts' as Tab, label: 'Graficos', icon: BarChart3 },
+    { id: 'votes' as Tab, label: 'Votos', icon: Vote },
     { id: 'config' as Tab, label: 'Configuracion', icon: Settings },
   ];
 
@@ -100,15 +100,7 @@ export function AdminPage() {
 
         {activeTab === 'technical' && <TechnicalDataForm />}
 
-        {activeTab === 'charts' && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <ComparisonBarChart />
-              <CriteriaRadarChart />
-            </div>
-            <RankingChart />
-          </div>
-        )}
+        {activeTab === 'votes' && <VoteManager />}
 
         {activeTab === 'config' && <ConfigPanel />}
       </main>

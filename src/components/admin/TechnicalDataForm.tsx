@@ -2,12 +2,14 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useStore } from '@/store/useStore';
-import { Save, ChevronDown, ChevronUp, Calculator } from 'lucide-react';
+import { Save, Calculator, Check } from 'lucide-react';
 
 export function TechnicalDataForm() {
-  const { projects, updateProject } = useStore();
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [editData, setEditData] = useState<Record<string, any>>({});
+  const { projects, updateProject, getProjectResults } = useStore();
+  const [editData, setEditData] = useState<Record<string, Record<string, number | undefined>>>({});
+  const [savedRows, setSavedRows] = useState<Set<string>>(new Set());
+
+  const results = getProjectResults();
 
   const handleFieldChange = (projectId: string, field: string, value: string) => {
     setEditData((prev) => ({
@@ -17,202 +19,184 @@ export function TechnicalDataForm() {
         [field]: value === '' ? undefined : Number(value),
       },
     }));
+    setSavedRows((prev) => { const n = new Set(prev); n.delete(projectId); return n; });
   };
 
   const handleSave = (projectId: string) => {
     const data = editData[projectId];
     if (data) {
       updateProject(projectId, data);
-      setEditData((prev) => {
-        const updated = { ...prev };
-        delete updated[projectId];
-        return updated;
-      });
+      setEditData((prev) => { const u = { ...prev }; delete u[projectId]; return u; });
+      setSavedRows((prev) => new Set(prev).add(projectId));
+      setTimeout(() => setSavedRows((prev) => { const n = new Set(prev); n.delete(projectId); return n; }), 2000);
     }
   };
 
-  // Preview calculated values
-  const getPreview = (projectId: string) => {
-    const project = projects.find((p) => p.id === projectId);
-    if (!project) return null;
-
-    const ownWeight = editData[projectId]?.ownWeight ?? project.ownWeight;
-    const failureLoad = editData[projectId]?.failureLoad ?? project.failureLoad;
-
-    if (ownWeight && ownWeight > 0 && failureLoad) {
-      const ratio = failureLoad / ownWeight;
-      return { ratio: ratio.toFixed(2) };
-    }
-    return null;
+  const handleSaveAll = () => {
+    Object.keys(editData).forEach((id) => {
+      const data = editData[id];
+      if (data && Object.keys(data).length > 0) {
+        updateProject(id, data);
+      }
+    });
+    setEditData({});
+    setSavedRows(new Set(projects.map((p) => p.id)));
+    setTimeout(() => setSavedRows(new Set()), 2000);
   };
+
+  const getValue = (projectId: string, field: string, current: number | undefined) => {
+    return editData[projectId]?.[field] !== undefined
+      ? editData[projectId][field]
+      : current;
+  };
+
+  const hasChanges = Object.keys(editData).some((id) => Object.keys(editData[id]).length > 0);
+
+  // Get result for a project
+  const getResult = (projectId: string) => results.find((r) => r.projectId === projectId);
+
+  const inputClass = "w-full px-2 py-1.5 text-sm text-center border rounded-lg outline-none font-medium tabular-nums";
 
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center gap-3">
-          <Calculator className="w-5 h-5" style={{ color: '#273475' }} />
-          <div>
-            <h3 className="text-lg font-bold text-gray-800">Datos Tecnicos de Proyectos</h3>
-            <p className="text-sm text-gray-500">
-              Ingrese manualmente: Peso Propio, Carga de Falla y Votacion del Video.
-              La relacion carga/peso y los puntos se calculan automaticamente.
-            </p>
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-3">
+            <Calculator className="w-5 h-5" style={{ color: '#273475' }} />
+            <div>
+              <h3 className="text-lg font-bold text-gray-800">Datos Tecnicos - Tabla General</h3>
+              <p className="text-xs text-gray-500">
+                Edite directamente en la tabla. Los campos con fondo rojo son manuales, los grises se calculan automaticamente.
+              </p>
+            </div>
           </div>
+          {hasChanges && (
+            <Button size="sm" onClick={handleSaveAll}>
+              <Save className="w-3.5 h-3.5" /> Guardar Todo
+            </Button>
+          )}
         </div>
       </CardHeader>
-      <CardContent>
-        {/* Legend */}
-        <div className="mb-4 p-3 bg-gray-50 rounded-xl text-xs text-gray-600 space-y-1">
-          <p><span className="font-bold text-red-700">Rojo:</span> Campos de entrada manual</p>
-          <p><span className="font-bold text-gray-500">Gris:</span> Valores calculados automaticamente</p>
-          <p className="mt-2 font-medium">Formulas:</p>
-          <p>RELACION C/P = Carga de Falla / Peso Propio</p>
-          <p>PUNTOS (70%) = (Relacion / MAX_Relacion) x 7</p>
-          <p>PUNTOS Video (10%) = (Video / MAX_Video) x 1</p>
+      <CardContent className="overflow-x-auto">
+        {/* Formulas reference */}
+        <div className="mb-3 flex flex-wrap gap-4 text-xs text-gray-500">
+          <span><b className="text-red-700">Manual</b> = Ingreso directo</span>
+          <span>Rel. C/P = Carga / Peso</span>
+          <span>Pts(70%) = (Rel / Max) x 7</span>
+          <span>Pts Video = (Video / Max) x 1</span>
         </div>
 
-        <div className="space-y-2">
-          {projects.map((project) => {
-            const preview = getPreview(project.id);
+        <table className="w-full text-sm border-collapse">
+          <thead>
+            <tr>
+              <th className="py-2 px-1 text-left text-xs font-bold text-gray-600 border-b-2" rowSpan={2}>Puente</th>
+              <th className="py-1 px-1 text-center text-xs font-bold text-white rounded-t-md" style={{ backgroundColor: '#c0392b' }} colSpan={2}>
+                ENTRADA MANUAL
+              </th>
+              <th className="py-1 px-1 text-center text-xs font-bold text-white rounded-t-md" style={{ backgroundColor: '#7f8c8d' }} colSpan={2}>
+                CALCULADO
+              </th>
+              <th className="py-1 px-1 text-center text-xs font-bold text-white rounded-t-md" style={{ backgroundColor: '#d4a017' }}>
+                MANUAL
+              </th>
+              <th className="py-1 px-1 text-center text-xs font-bold text-white rounded-t-md" style={{ backgroundColor: '#7f8c8d' }}>
+                CALC.
+              </th>
+              <th className="py-1 px-1" rowSpan={2}></th>
+            </tr>
+            <tr className="border-b-2 border-gray-300">
+              <th className="py-1.5 px-1 text-center text-xs font-semibold" style={{ backgroundColor: '#fde8e8', color: '#c0392b' }}>Peso (gr)</th>
+              <th className="py-1.5 px-1 text-center text-xs font-semibold" style={{ backgroundColor: '#fde8e8', color: '#c0392b' }}>Carga (gr)</th>
+              <th className="py-1.5 px-1 text-center text-xs font-semibold bg-gray-100 text-gray-600">Rel. C/P</th>
+              <th className="py-1.5 px-1 text-center text-xs font-semibold bg-gray-100 text-gray-600">Pts (70%)</th>
+              <th className="py-1.5 px-1 text-center text-xs font-semibold" style={{ backgroundColor: '#fef9e7', color: '#9a7d0a' }}>Video</th>
+              <th className="py-1.5 px-1 text-center text-xs font-semibold bg-gray-100 text-gray-600">Pts (10%)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {projects.map((project) => {
+              const r = getResult(project.id);
+              const isSaved = savedRows.has(project.id);
+              const hasEdit = editData[project.id] && Object.keys(editData[project.id]).length > 0;
 
-            return (
-              <div key={project.id} className="border border-gray-100 rounded-xl overflow-hidden">
-                <button
-                  onClick={() => setExpandedId(expandedId === project.id ? null : project.id)}
-                  className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs font-bold px-2 py-1 rounded" style={{ color: '#273475', backgroundColor: '#273475' + '15' }}>
-                      {project.code}
-                    </span>
-                    <span className="font-medium text-gray-800">{project.name}</span>
-                    {/* Status indicators */}
-                    <div className="flex gap-1">
-                      {project.ownWeight && project.failureLoad ? (
-                        <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Carga OK</span>
-                      ) : (
-                        <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full">Sin datos carga</span>
-                      )}
-                      {project.videoScore ? (
-                        <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Video OK</span>
-                      ) : (
-                        <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">Sin video</span>
-                      )}
+              return (
+                <tr key={project.id} className={`border-b border-gray-100 ${hasEdit ? 'bg-amber-50/40' : ''} ${isSaved ? 'bg-green-50' : ''}`}>
+                  {/* Project name */}
+                  <td className="py-2 px-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0" style={{ color: '#273475', backgroundColor: '#273475' + '15' }}>
+                        {project.code}
+                      </span>
+                      <span className="font-medium text-gray-800 text-xs whitespace-nowrap">{project.name}</span>
                     </div>
-                  </div>
-                  {expandedId === project.id ? (
-                    <ChevronUp className="w-4 h-4 text-gray-400" />
-                  ) : (
-                    <ChevronDown className="w-4 h-4 text-gray-400" />
-                  )}
-                </button>
-
-                {expandedId === project.id && (
-                  <div className="px-4 pb-4 space-y-4 border-t border-gray-100 pt-4">
-                    {/* Manual inputs - RED background */}
-                    <div>
-                      <p className="text-xs font-bold text-red-700 mb-2 uppercase tracking-wide">Campos Manuales</p>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <div className="p-3 rounded-lg border-2 border-red-200 bg-red-50/50">
-                          <label className="block text-xs font-semibold text-red-800 mb-1">
-                            Peso Propio del Puente (gr)
-                          </label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={
-                              editData[project.id]?.ownWeight !== undefined
-                                ? editData[project.id].ownWeight
-                                : project.ownWeight ?? ''
-                            }
-                            onChange={(e) => handleFieldChange(project.id, 'ownWeight', e.target.value)}
-                            className="w-full px-3 py-2 text-sm border border-red-200 rounded-lg focus:ring-2 focus:ring-red-400/40 outline-none bg-white font-medium"
-                            placeholder="Ej: 1"
-                          />
-                        </div>
-                        <div className="p-3 rounded-lg border-2 border-red-200 bg-red-50/50">
-                          <label className="block text-xs font-semibold text-red-800 mb-1">
-                            Carga de Falla (gr)
-                          </label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={
-                              editData[project.id]?.failureLoad !== undefined
-                                ? editData[project.id].failureLoad
-                                : project.failureLoad ?? ''
-                            }
-                            onChange={(e) => handleFieldChange(project.id, 'failureLoad', e.target.value)}
-                            className="w-full px-3 py-2 text-sm border border-red-200 rounded-lg focus:ring-2 focus:ring-red-400/40 outline-none bg-white font-medium"
-                            placeholder="Ej: 400"
-                          />
-                        </div>
-                        <div className="p-3 rounded-lg border-2 border-amber-300 bg-amber-50/50">
-                          <label className="block text-xs font-semibold text-amber-800 mb-1">
-                            Votacion del Video
-                          </label>
-                          <input
-                            type="number"
-                            step="1"
-                            min="0"
-                            value={
-                              editData[project.id]?.videoScore !== undefined
-                                ? editData[project.id].videoScore
-                                : project.videoScore ?? ''
-                            }
-                            onChange={(e) => handleFieldChange(project.id, 'videoScore', e.target.value)}
-                            className="w-full px-3 py-2 text-sm border border-amber-200 rounded-lg focus:ring-2 focus:ring-amber-400/40 outline-none bg-white font-medium"
-                            placeholder="Ej: 5200"
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Calculated preview */}
-                    {preview && (
-                      <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-                        <p className="text-xs font-bold text-gray-500 mb-2 uppercase tracking-wide">Vista Previa - Valores Calculados</p>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <span className="text-xs text-gray-500">Relacion Carga/Peso:</span>
-                            <p className="font-bold text-gray-800">{preview.ratio}</p>
-                          </div>
-                          <div>
-                            <span className="text-xs text-gray-500">Los puntos se calculan al guardar</span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Current values summary */}
-                    <div className="grid grid-cols-3 gap-2 text-xs">
-                      <div className="p-2 bg-gray-50 rounded text-center">
-                        <span className="text-gray-500 block">Peso actual</span>
-                        <span className="font-bold text-gray-700">{project.ownWeight ?? '-'} gr</span>
-                      </div>
-                      <div className="p-2 bg-gray-50 rounded text-center">
-                        <span className="text-gray-500 block">Carga actual</span>
-                        <span className="font-bold text-gray-700">{project.failureLoad ?? '-'} gr</span>
-                      </div>
-                      <div className="p-2 bg-gray-50 rounded text-center">
-                        <span className="text-gray-500 block">Video actual</span>
-                        <span className="font-bold text-gray-700">{project.videoScore?.toLocaleString() ?? '-'}</span>
-                      </div>
-                    </div>
-
-                    <div className="flex justify-end pt-2">
-                      <Button size="sm" onClick={() => handleSave(project.id)}>
-                        <Save className="w-3 h-3" /> Guardar Datos
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+                  </td>
+                  {/* Peso Propio - MANUAL */}
+                  <td className="py-1 px-1" style={{ backgroundColor: '#fdf2f2' }}>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={getValue(project.id, 'ownWeight', project.ownWeight) ?? ''}
+                      onChange={(e) => handleFieldChange(project.id, 'ownWeight', e.target.value)}
+                      className={`${inputClass} border-red-200 focus:ring-2 focus:ring-red-300/50 bg-white w-20`}
+                      placeholder="-"
+                    />
+                  </td>
+                  {/* Carga Falla - MANUAL */}
+                  <td className="py-1 px-1" style={{ backgroundColor: '#fdf2f2' }}>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={getValue(project.id, 'failureLoad', project.failureLoad) ?? ''}
+                      onChange={(e) => handleFieldChange(project.id, 'failureLoad', e.target.value)}
+                      className={`${inputClass} border-red-200 focus:ring-2 focus:ring-red-300/50 bg-white w-20`}
+                      placeholder="-"
+                    />
+                  </td>
+                  {/* Relacion - CALCULATED */}
+                  <td className="py-1 px-1 text-center text-xs font-medium text-gray-600 bg-gray-50">
+                    {r && r.loadWeightRatio > 0 ? r.loadWeightRatio.toFixed(1) : '-'}
+                  </td>
+                  {/* Puntos 70% - CALCULATED */}
+                  <td className="py-1 px-1 text-center text-xs font-bold bg-gray-50" style={{ color: '#c0392b' }}>
+                    {r && r.loadWeightRatio > 0 ? r.loadWeightPoints.toFixed(3) : '-'}
+                  </td>
+                  {/* Video - MANUAL */}
+                  <td className="py-1 px-1" style={{ backgroundColor: '#fffdf0' }}>
+                    <input
+                      type="number"
+                      step="1"
+                      min="0"
+                      value={getValue(project.id, 'videoScore', project.videoScore) ?? ''}
+                      onChange={(e) => handleFieldChange(project.id, 'videoScore', e.target.value)}
+                      className={`${inputClass} border-amber-200 focus:ring-2 focus:ring-amber-300/50 bg-white w-20`}
+                      placeholder="-"
+                    />
+                  </td>
+                  {/* Puntos Video - CALCULATED */}
+                  <td className="py-1 px-1 text-center text-xs font-bold bg-gray-50" style={{ color: '#9a7d0a' }}>
+                    {r && r.videoScore > 0 ? r.videoPoints.toFixed(2) : '-'}
+                  </td>
+                  {/* Save button */}
+                  <td className="py-1 px-1 text-center">
+                    {isSaved ? (
+                      <Check className="w-4 h-4 text-green-500 mx-auto" />
+                    ) : hasEdit ? (
+                      <button
+                        onClick={() => handleSave(project.id)}
+                        className="p-1 rounded hover:bg-blue-100 transition-colors"
+                        title="Guardar"
+                      >
+                        <Save className="w-3.5 h-3.5" style={{ color: '#273475' }} />
+                      </button>
+                    ) : null}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </CardContent>
     </Card>
   );

@@ -1,6 +1,5 @@
 import { useStore } from '@/store/useStore';
 import { KPICards } from '@/components/dashboard/KPICards';
-import { ComparisonBarChart, CriteriaRadarChart, RankingChart } from '@/components/dashboard/Charts';
 import { ResultsTable } from '@/components/dashboard/ResultsTable';
 import { BarChart3, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -28,7 +27,7 @@ export function DashboardPage() {
               />
               <div className="hidden sm:block unipaz-separator bg-white/30 h-8"></div>
               <div>
-                <h1 className="text-lg md:text-xl font-bold">Dashboard en Tiempo Real</h1>
+                <h1 className="text-lg md:text-xl font-bold">Resultados en Tiempo Real</h1>
                 <p className="text-indigo-300 text-xs md:text-sm">Primer Concurso de Puentes &bull; IAS UNIPAZ 2026</p>
               </div>
             </div>
@@ -59,15 +58,6 @@ export function DashboardPage() {
           </div>
           <KPICards />
         </section>
-
-        {/* Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <ComparisonBarChart />
-          <CriteriaRadarChart />
-        </div>
-
-        {/* Ranking */}
-        <RankingChart />
 
         {/* Results Table */}
         <ResultsTable />
