@@ -82,6 +82,12 @@ export const useStore = create<AppState>()((set, get) => ({
       // Initial load of projects (triggers seed if empty)
       const projects = await fb.loadProjects();
       set({ projects, loading: false });
+
+      // Limpiar votos duplicados en la base de datos
+      const deleted = await fb.cleanDuplicateVotes();
+      if (deleted > 0) {
+        console.log(`[INIT] Se eliminaron ${deleted} votos duplicados`);
+      }
     } catch (error) {
       console.error('Firebase init error:', error);
       // Fallback to initial data if Firebase fails

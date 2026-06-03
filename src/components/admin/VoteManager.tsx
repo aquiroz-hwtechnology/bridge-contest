@@ -3,7 +3,8 @@ import { Card, CardContent, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { useStore } from '@/store/useStore';
-import { Trash2, AlertTriangle, User, Building2, Clock } from 'lucide-react';
+import { cleanDuplicateVotes } from '@/lib/firebaseService';
+import { Trash2, AlertTriangle, User, Building2, Clock, Sparkles } from 'lucide-react';
 
 export function VoteManager() {
   const { votes, projects, deleteVote, deleteVotesForProject, resetVotes } = useStore();
@@ -11,6 +12,21 @@ export function VoteManager() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [bulkDeleteProject, setBulkDeleteProject] = useState<string | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [cleaning, setCleaning] = useState(false);
+  const [cleanMsg, setCleanMsg] = useState('');
+
+  const handleCleanDuplicates = async () => {
+    setCleaning(true);
+    setCleanMsg('');
+    try {
+      const deleted = await cleanDuplicateVotes();
+      setCleanMsg(deleted > 0 ? `Se eliminaron ${deleted} votos duplicados.` : 'No se encontraron duplicados.');
+    } catch (e) {
+      setCleanMsg('Error al limpiar duplicados.');
+    } finally {
+      setCleaning(false);
+    }
+  };
 
   const filteredVotes = filterProject === 'all'
     ? votes
@@ -42,8 +58,18 @@ export function VoteManager() {
       {/* Summary */}
       <Card>
         <CardHeader>
-          <h3 className="text-lg font-bold text-gray-800">Resumen de Votos por Proyecto</h3>
-          <p className="text-sm text-gray-500">Total: {votes.length} votos de {new Set(votes.map((v) => v.judgeId)).size} evaluadores</p>
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <h3 className="text-lg font-bold text-gray-800">Resumen de Votos por Proyecto</h3>
+              <p className="text-sm text-gray-500">Total: {votes.length} votos de {new Set(votes.map((v) => v.judgeId)).size} evaluadores</p>
+            </div>
+            <Button size="sm" variant="secondary" onClick={handleCleanDuplicates} loading={cleaning} disabled={cleaning}>
+              <Sparkles className="w-3.5 h-3.5" /> Limpiar Duplicados
+            </Button>
+          </div>
+          {cleanMsg && (
+            <p className={`text-sm mt-2 ${cleanMsg.includes('Error') ? 'text-red-600' : 'text-green-600'}`}>{cleanMsg}</p>
+          )}
         </CardHeader>
         <CardContent>
           {voteSummary.length === 0 ? (
