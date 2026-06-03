@@ -18,6 +18,7 @@ export function ResultsTable() {
   const [showEstetica, setShowEstetica] = useState(true);
   const [showVideo, setShowVideo] = useState(true);
   const [showFicha, setShowFicha] = useState(true);
+  const [showTotal, setShowTotal] = useState(true);
 
   const getRankBadge = (rank: number) => {
     if (rank === 1) return <Trophy className="w-5 h-5 text-amber-500" />;
@@ -187,6 +188,7 @@ export function ResultsTable() {
           <ToggleBtn label="Estetica (10%)" color="#2980b9" active={showEstetica} onClick={() => setShowEstetica(!showEstetica)} />
           <ToggleBtn label="Video (10%)" color="#d4a017" active={showVideo} onClick={() => setShowVideo(!showVideo)} />
           <ToggleBtn label="Ficha Tecnica (10%)" color="#009738" active={showFicha} onClick={() => setShowFicha(!showFicha)} />
+          <ToggleBtn label="Total" color="#273475" active={showTotal} onClick={() => setShowTotal(!showTotal)} />
         </div>
       </CardHeader>
       <CardContent className="overflow-x-auto">
@@ -215,7 +217,7 @@ export function ResultsTable() {
                   FICHA TECNICA (10%)
                 </th>
               )}
-              <th className="py-2 px-2"></th>
+              {showTotal && <th className="py-2 px-2"></th>}
             </tr>
             {/* Column headers */}
             <tr className="border-b-2 border-gray-300">
@@ -239,7 +241,7 @@ export function ResultsTable() {
                 <th className={`${thBase} text-center`} style={{ backgroundColor: '#e8f8f0', color: '#007a2d' }}>Promedio</th>
                 <th className={`${thBase} text-center`} style={{ backgroundColor: '#e8f8f0', color: '#007a2d' }}>Puntos</th>
               </>}
-              <th className={`${thBase} text-center font-bold`} style={{ backgroundColor: '#273475', color: 'white' }}>TOTAL</th>
+              {showTotal && <th className={`${thBase} text-center font-bold`} style={{ backgroundColor: '#273475', color: 'white' }}>TOTAL</th>}
             </tr>
           </thead>
           <tbody>
@@ -286,9 +288,11 @@ export function ResultsTable() {
                     {r.totalVotes > 0 ? fmt(r.technicalSheetPoints, 2) : '-'}
                   </td>
                 </>}
-                <td className={`${tdBase} font-bold text-base`} style={{ backgroundColor: '#273475', color: 'white' }}>
-                  {fmt(r.totalScore, 1)}
-                </td>
+                {showTotal && (
+                  <td className={`${tdBase} font-bold text-base`} style={{ backgroundColor: '#273475', color: 'white' }}>
+                    {fmt(r.totalScore, 1)}
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
