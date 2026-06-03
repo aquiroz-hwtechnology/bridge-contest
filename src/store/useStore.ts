@@ -56,12 +56,16 @@ export const useStore = create<AppState>()(
       addProject: (project) =>
         set((state) => ({ projects: [...state.projects, project] })),
 
-      updateProject: (id, data) =>
-        set((state) => ({
-          projects: state.projects.map((p) =>
+      updateProject: (id, data) => {
+        console.log('[STORE] updateProject called:', id, data);
+        set((state) => {
+          const newProjects = state.projects.map((p) =>
             p.id === id ? { ...p, ...data, updatedAt: new Date().toISOString() } : p
-          ),
-        })),
+          );
+          console.log('[STORE] Project updated. New value:', newProjects.find(p => p.id === id));
+          return { projects: newProjects };
+        });
+      },
 
       deleteProject: (id) =>
         set((state) => ({
@@ -105,26 +109,6 @@ export const useStore = create<AppState>()(
         const { projects, votes, config } = get();
         const { weights } = config;
 
-        // ============================================================
-        // FORMULAS EXACTAS DEL EXCEL - Concurso de Puentes UNIPAZ
-        // ============================================================
-        //
-        // 1. RELACION CARGA/PESO = Carga de Falla / Peso Propio
-        // 2. PUNTOS (70%) = (Relacion / MAX_Relacion) * (weights.loadWeight / 10)
-        //    -> Con peso 70%, max puntos = 7
-        // 3. ESTETICA (promedio) = Promedio de votos evaluadores (1-10)
-        // 4. PUNTOS EST (10%) = Promedio_Estetica / 10 * (weights.aesthetic / 10)
-        //    -> Con peso 10%, max puntos = 1
-        // 5. VOTACION VIDEO = Valor manual ingresado por admin
-        // 6. PUNTOS VIDEO (10%) = (Video / MAX_Video) * (weights.video / 10)
-        //    -> Con peso 10%, max puntos = 1
-        // 7. FICHA TECNICA (promedio) = Promedio de votos evaluadores (1-10)
-        // 8. PUNTOS FICHA (10%) = Promedio_Ficha / 10 * (weights.technicalSheet / 10)
-        //    -> Con peso 10%, max puntos = 1
-        // 9. TOTAL = Suma de todos los PUNTOS (max = 10)
-        // ============================================================
-
-        // Step 1: Calculate relacion carga/peso for each project
         const projectData = projects.map((project) => {
           const ratio = (project.ownWeight && project.ownWeight > 0 && project.failureLoad)
             ? project.failureLoad / project.ownWeight
@@ -132,24 +116,18 @@ export const useStore = create<AppState>()(
           return { project, ratio };
         });
 
-        // Step 2: Find MAX values for normalization
         const maxRatio = Math.max(...projectData.map((d) => d.ratio), 0.001);
-        const maxVideo = Math.max(
-          ...projects.map((p) => p.videoScore || 0),
-          0.001
-        );
+        const maxVideo = Math.max(...projects.map((p) => p.videoScore || 0), 0.001);
 
-        // Step 3: Max points per category
-        const maxPointsCarga = weights.loadWeight / 10;   // 70/10 = 7
-        const maxPointsEstetica = weights.aesthetic / 10;  // 10/10 = 1
-        const maxPointsVideo = weights.video / 10;         // 10/10 = 1
-        const maxPointsFicha = weights.technicalSheet / 10; // 10/10 = 1
+        const maxPointsCarga = weights.loadWeight / 10;
+        const maxPointsEstetica = weights.aesthetic / 10;
+        const maxPointsVideo = weights.video / 10;
+        const maxPointsFicha = weights.technicalSheet / 10;
 
         const results: ProjectResults[] = projectData.map(({ project, ratio }) => {
           const projectVotes = votes.filter((v) => v.projectId === project.id);
           const totalVotes = projectVotes.length;
 
-          // Promedios de votacion (escala 1-10)
           const aestheticAverage = totalVotes > 0
             ? projectVotes.reduce((sum, v) => sum + v.aestheticScore, 0) / totalVotes
             : 0;
@@ -158,7 +136,6 @@ export const useStore = create<AppState>()(
             ? projectVotes.reduce((sum, v) => sum + v.technicalSheetScore, 0) / totalVotes
             : 0;
 
-          // PUNTOS calculados con formulas del Excel
           const loadWeightPoints = (ratio / maxRatio) * maxPointsCarga;
           const aestheticPoints = (aestheticAverage / 10) * maxPointsEstetica;
           const videoScore = project.videoScore || 0;
@@ -171,7 +148,6 @@ export const useStore = create<AppState>()(
             projectId: project.id,
             projectName: project.name,
             totalVotes,
-            // Raw values
             ownWeight: project.ownWeight || 0,
             failureLoad: project.failureLoad || 0,
             loadWeightRatio: ratio,
@@ -187,7 +163,6 @@ export const useStore = create<AppState>()(
           };
         });
 
-        // Assign ranks (sorted by total score descending)
         results.sort((a, b) => b.totalScore - a.totalScore);
         results.forEach((r, i) => {
           r.rank = i + 1;
@@ -200,7 +175,33 @@ export const useStore = create<AppState>()(
     }),
     {
       name: 'bridge-contest-storage',
-      version: 2,
+      // NO version - evita problemas de migracion
     }
   )
 );
+
+// ============================================================
+// SINCRONIZACION ENTRE PESTANAS
+// Cuando el admin guarda datos en una pestana, la otra pestana
+// (dashboard) detecta el cambio en localStorage y recarga el estado
+// ============================================================
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (event) => {
+    if (event.key === 'bridge-contest-storage' && event.newValue) {
+      console.log('[SYNC] localStorage changed from another tab, rehydrating...');
+      try {
+        const parsed = JSON.parse(event.newValue);
+        if (parsed?.state) {
+          useStore.setState({
+            projects: parsed.state.projects || initialBridges,
+            votes: parsed.state.votes || [],
+            config: parsed.state.config || defaultConfig,
+          });
+          console.log('[SYNC] State rehydrated from other tab');
+        }
+      } catch (e) {
+        console.error('[SYNC] Failed to parse storage event', e);
+      }
+    }
+  });
+}
