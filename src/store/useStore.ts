@@ -1,207 +1,187 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import type { BridgeProject, Vote, AppConfig, ProjectResults } from '@/types';
 import { initialBridges } from '@/data/bridges';
 
+// ============================================================
+// PERSISTENCIA MANUAL - Sin middleware persist de Zustand
+// Lectura/escritura directa a localStorage con control total
+// ============================================================
+
+const STORAGE_KEY = 'bridge-contest-v3';
+
+const defaultConfig: AppConfig = {
+  weights: { loadWeight: 70, aesthetic: 10, video: 10, technicalSheet: 10 },
+  adminPassword: 'unipaz2026',
+  contestName: 'Primer Concurso de Puentes',
+  contestDate: '2026-06-15',
+  institution: 'IAS UNIPAZ',
+};
+
+// Leer estado guardado del localStorage
+function loadFromStorage(): { projects: BridgeProject[]; votes: Vote[]; config: AppConfig } {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const data = JSON.parse(raw);
+      return {
+        projects: data.projects || initialBridges,
+        votes: data.votes || [],
+        config: data.config || defaultConfig,
+      };
+    }
+  } catch (e) {
+    console.error('Error loading from localStorage:', e);
+  }
+  return { projects: initialBridges, votes: [], config: defaultConfig };
+}
+
+// Guardar estado al localStorage
+function saveToStorage(state: { projects: BridgeProject[]; votes: Vote[]; config: AppConfig }) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({
+      projects: state.projects,
+      votes: state.votes,
+      config: state.config,
+    }));
+  } catch (e) {
+    console.error('Error saving to localStorage:', e);
+  }
+}
+
+// Estado inicial desde localStorage
+const savedState = loadFromStorage();
+
 interface AppState {
-  // Data
   projects: BridgeProject[];
   votes: Vote[];
   config: AppConfig;
   isAdmin: boolean;
-
-  // Actions - Projects
   addProject: (project: BridgeProject) => void;
   updateProject: (id: string, data: Partial<BridgeProject>) => void;
   deleteProject: (id: string) => void;
-
-  // Actions - Votes
   addVote: (vote: Vote) => void;
   deleteVote: (voteId: string) => void;
   deleteVotesForProject: (projectId: string) => void;
   hasVoted: (judgeId: string, projectId: string) => boolean;
   getVotesForProject: (projectId: string) => Vote[];
-
-  // Actions - Admin
   login: (password: string) => boolean;
   logout: () => void;
   updateConfig: (config: Partial<AppConfig>) => void;
-
-  // Calculations
   getProjectResults: () => ProjectResults[];
   resetVotes: () => void;
 }
 
-const defaultConfig: AppConfig = {
-  weights: {
-    loadWeight: 70,
-    aesthetic: 10,
-    video: 10,
-    technicalSheet: 10,
+export const useStore = create<AppState>()((set, get) => ({
+  projects: savedState.projects,
+  votes: savedState.votes,
+  config: savedState.config,
+  isAdmin: false,
+
+  addProject: (project) => set((s) => ({ projects: [...s.projects, project] })),
+
+  updateProject: (id, data) => set((s) => ({
+    projects: s.projects.map((p) =>
+      p.id === id ? { ...p, ...data, updatedAt: new Date().toISOString() } : p
+    ),
+  })),
+
+  deleteProject: (id) => set((s) => ({
+    projects: s.projects.filter((p) => p.id !== id),
+    votes: s.votes.filter((v) => v.projectId !== id),
+  })),
+
+  addVote: (vote) => set((s) => ({ votes: [...s.votes, vote] })),
+
+  deleteVote: (voteId) => set((s) => ({ votes: s.votes.filter((v) => v.id !== voteId) })),
+
+  deleteVotesForProject: (pid) => set((s) => ({ votes: s.votes.filter((v) => v.projectId !== pid) })),
+
+  hasVoted: (judgeId, projectId) => get().votes.some((v) => v.judgeId === judgeId && v.projectId === projectId),
+
+  getVotesForProject: (pid) => get().votes.filter((v) => v.projectId === pid),
+
+  login: (password) => {
+    const ok = password === get().config.adminPassword;
+    if (ok) set({ isAdmin: true });
+    return ok;
   },
-  adminPassword: 'unipaz2026',
-  contestName: 'Primer Concurso de Puentes - Programas de Tecnologia en Obras Civiles e Ingenieria Civil',
-  contestDate: '2026-06-15',
-  institution: 'Instituto Universitario de la Paz - UNIPAZ - IAS',
-};
 
-export const useStore = create<AppState>()(
-  persist(
-    (set, get) => ({
-      projects: initialBridges,
-      votes: [],
-      config: defaultConfig,
-      isAdmin: false,
+  logout: () => set({ isAdmin: false }),
 
-      addProject: (project) =>
-        set((state) => ({ projects: [...state.projects, project] })),
+  updateConfig: (c) => set((s) => ({ config: { ...s.config, ...c } })),
 
-      updateProject: (id, data) => {
-        console.log('[STORE] updateProject called:', id, data);
-        set((state) => {
-          const newProjects = state.projects.map((p) =>
-            p.id === id ? { ...p, ...data, updatedAt: new Date().toISOString() } : p
-          );
-          console.log('[STORE] Project updated. New value:', newProjects.find(p => p.id === id));
-          return { projects: newProjects };
-        });
-      },
+  getProjectResults: () => {
+    const { projects, votes, config } = get();
+    const { weights } = config;
 
-      deleteProject: (id) =>
-        set((state) => ({
-          projects: state.projects.filter((p) => p.id !== id),
-          votes: state.votes.filter((v) => v.projectId !== id),
-        })),
+    const projectData = projects.map((project) => {
+      const ratio = (project.ownWeight && project.ownWeight > 0 && project.failureLoad)
+        ? project.failureLoad / project.ownWeight : 0;
+      return { project, ratio };
+    });
 
-      addVote: (vote) =>
-        set((state) => ({ votes: [...state.votes, vote] })),
+    const maxRatio = Math.max(...projectData.map((d) => d.ratio), 0.001);
+    const maxVideo = Math.max(...projects.map((p) => p.videoScore || 0), 0.001);
+    const ptsCarga = weights.loadWeight / 10;
+    const ptsEst = weights.aesthetic / 10;
+    const ptsVid = weights.video / 10;
+    const ptsFicha = weights.technicalSheet / 10;
 
-      deleteVote: (voteId) =>
-        set((state) => ({ votes: state.votes.filter((v) => v.id !== voteId) })),
+    const results: ProjectResults[] = projectData.map(({ project, ratio }) => {
+      const pv = votes.filter((v) => v.projectId === project.id);
+      const n = pv.length;
+      const avgEst = n > 0 ? pv.reduce((s, v) => s + v.aestheticScore, 0) / n : 0;
+      const avgFicha = n > 0 ? pv.reduce((s, v) => s + v.technicalSheetScore, 0) / n : 0;
+      const vs = project.videoScore || 0;
 
-      deleteVotesForProject: (projectId) =>
-        set((state) => ({ votes: state.votes.filter((v) => v.projectId !== projectId) })),
+      return {
+        projectId: project.id,
+        projectName: project.name,
+        totalVotes: n,
+        ownWeight: project.ownWeight || 0,
+        failureLoad: project.failureLoad || 0,
+        loadWeightRatio: ratio,
+        loadWeightPoints: (ratio / maxRatio) * ptsCarga,
+        aestheticAverage: avgEst,
+        aestheticPoints: (avgEst / 10) * ptsEst,
+        videoScore: vs,
+        videoPoints: (vs / maxVideo) * ptsVid,
+        technicalSheetAverage: avgFicha,
+        technicalSheetPoints: (avgFicha / 10) * ptsFicha,
+        totalScore: (ratio / maxRatio) * ptsCarga + (avgEst / 10) * ptsEst + (vs / maxVideo) * ptsVid + (avgFicha / 10) * ptsFicha,
+        rank: 0,
+      };
+    });
 
-      hasVoted: (judgeId, projectId) => {
-        return get().votes.some(
-          (v) => v.judgeId === judgeId && v.projectId === projectId
-        );
-      },
+    results.sort((a, b) => b.totalScore - a.totalScore);
+    results.forEach((r, i) => { r.rank = i + 1; });
+    return results;
+  },
 
-      getVotesForProject: (projectId) => {
-        return get().votes.filter((v) => v.projectId === projectId);
-      },
-
-      login: (password) => {
-        const isValid = password === get().config.adminPassword;
-        if (isValid) set({ isAdmin: true });
-        return isValid;
-      },
-
-      logout: () => set({ isAdmin: false }),
-
-      updateConfig: (newConfig) =>
-        set((state) => ({
-          config: { ...state.config, ...newConfig },
-        })),
-
-      getProjectResults: () => {
-        const { projects, votes, config } = get();
-        const { weights } = config;
-
-        const projectData = projects.map((project) => {
-          const ratio = (project.ownWeight && project.ownWeight > 0 && project.failureLoad)
-            ? project.failureLoad / project.ownWeight
-            : 0;
-          return { project, ratio };
-        });
-
-        const maxRatio = Math.max(...projectData.map((d) => d.ratio), 0.001);
-        const maxVideo = Math.max(...projects.map((p) => p.videoScore || 0), 0.001);
-
-        const maxPointsCarga = weights.loadWeight / 10;
-        const maxPointsEstetica = weights.aesthetic / 10;
-        const maxPointsVideo = weights.video / 10;
-        const maxPointsFicha = weights.technicalSheet / 10;
-
-        const results: ProjectResults[] = projectData.map(({ project, ratio }) => {
-          const projectVotes = votes.filter((v) => v.projectId === project.id);
-          const totalVotes = projectVotes.length;
-
-          const aestheticAverage = totalVotes > 0
-            ? projectVotes.reduce((sum, v) => sum + v.aestheticScore, 0) / totalVotes
-            : 0;
-
-          const technicalSheetAverage = totalVotes > 0
-            ? projectVotes.reduce((sum, v) => sum + v.technicalSheetScore, 0) / totalVotes
-            : 0;
-
-          const loadWeightPoints = (ratio / maxRatio) * maxPointsCarga;
-          const aestheticPoints = (aestheticAverage / 10) * maxPointsEstetica;
-          const videoScore = project.videoScore || 0;
-          const videoPoints = (videoScore / maxVideo) * maxPointsVideo;
-          const technicalSheetPoints = (technicalSheetAverage / 10) * maxPointsFicha;
-
-          const totalScore = loadWeightPoints + aestheticPoints + videoPoints + technicalSheetPoints;
-
-          return {
-            projectId: project.id,
-            projectName: project.name,
-            totalVotes,
-            ownWeight: project.ownWeight || 0,
-            failureLoad: project.failureLoad || 0,
-            loadWeightRatio: ratio,
-            loadWeightPoints,
-            aestheticAverage,
-            aestheticPoints,
-            videoScore,
-            videoPoints,
-            technicalSheetAverage,
-            technicalSheetPoints,
-            totalScore,
-            rank: 0,
-          };
-        });
-
-        results.sort((a, b) => b.totalScore - a.totalScore);
-        results.forEach((r, i) => {
-          r.rank = i + 1;
-        });
-
-        return results;
-      },
-
-      resetVotes: () => set({ votes: [] }),
-    }),
-    {
-      name: 'bridge-contest-storage',
-      // NO version - evita problemas de migracion
-    }
-  )
-);
+  resetVotes: () => set({ votes: [] }),
+}));
 
 // ============================================================
-// SINCRONIZACION ENTRE PESTANAS
-// Cuando el admin guarda datos en una pestana, la otra pestana
-// (dashboard) detecta el cambio en localStorage y recarga el estado
+// AUTO-SAVE: Cada vez que el estado cambia, guardar a localStorage
+// ============================================================
+useStore.subscribe((state) => {
+  saveToStorage({ projects: state.projects, votes: state.votes, config: state.config });
+});
+
+// ============================================================
+// CROSS-TAB SYNC: Cuando otra pestana/navegador modifica localStorage
 // ============================================================
 if (typeof window !== 'undefined') {
-  window.addEventListener('storage', (event) => {
-    if (event.key === 'bridge-contest-storage' && event.newValue) {
-      console.log('[SYNC] localStorage changed from another tab, rehydrating...');
+  window.addEventListener('storage', (e) => {
+    if (e.key === STORAGE_KEY && e.newValue) {
       try {
-        const parsed = JSON.parse(event.newValue);
-        if (parsed?.state) {
-          useStore.setState({
-            projects: parsed.state.projects || initialBridges,
-            votes: parsed.state.votes || [],
-            config: parsed.state.config || defaultConfig,
-          });
-          console.log('[SYNC] State rehydrated from other tab');
-        }
-      } catch (e) {
-        console.error('[SYNC] Failed to parse storage event', e);
-      }
+        const data = JSON.parse(e.newValue);
+        useStore.setState({
+          projects: data.projects || initialBridges,
+          votes: data.votes || [],
+          config: data.config || defaultConfig,
+        });
+      } catch {}
     }
   });
 }
